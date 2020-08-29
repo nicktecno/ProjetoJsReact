@@ -8,12 +8,14 @@ class ProviderController {
       attributes: ['id', 'name', 'email', 'avatar_id'],
       include: [
         {
+          // isso aqui é muito importante, ele consegue pegar de outros models as caracteristicas cadastradas relacionadas
           model: File,
           as: 'avatar',
           attributes: ['name', 'path', 'url'],
         },
       ],
     });
+
     return res.json(providers);
   }
 }
