@@ -7,7 +7,8 @@ import File from '../models/File';
 import Appointment from '../models/Appointment';
 import Notification from '../schemas/Notification';
 
-import Mail from '../../lib/Mail';
+import CancellationMail from '../jobs/CancellationMail';
+import Queue from '../../lib/Queue';
 
 class AppointmentController {
   async index(req, res) {
@@ -19,9 +20,10 @@ class AppointmentController {
       order: ['date'],
       limit: 20,
       offset: (page - 1) * 20, // quantos registros pulam por pagina
-      attributes: ['id', 'date'],
+      attributes: ['id', 'date', 'past', 'cancelable'],
       include: [
         {
+          // como quero listar tudo junto em um campo apenas se torna necessário o associate de models para poder listar tudo depois
           model: User,
           as: 'provider',
           attributes: ['id', 'name'],
@@ -112,6 +114,11 @@ class AppointmentController {
           as: 'provider',
           attributes: ['name', 'email'],
         },
+        {
+          model: User,
+          as: 'user',
+          attributes: ['name'],
+        },
       ],
     });
 
@@ -124,17 +131,14 @@ class AppointmentController {
     if (isBefore(dateWithSub, new Date())) {
       // Verificaçao se o horario atual está antes de -2 horas do horario do agendamento que é o valor do dateWithSub
       return res.status(401).json({
-        error: 'Você só pode cancela 2 horas antes do seu agendamento',
+        error: 'Você só pode cancelar 2 horas antes do seu agendamento',
       });
     }
     appointment.canceled_at = new Date();
 
     await appointment.save();
-
-    await Mail.sendMail({
-      to: `${appointment.provider.name} <${appointment.provider.email}>`,
-      subject: 'Agendamento cancelado',
-      text: 'Você tem um novo cancelamento',
+    await Queue.add(CancellationMail.key, {
+      appointment,
     });
 
     return res.json(appointment);
